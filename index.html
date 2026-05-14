@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>財產及物品管理系統</title>
+  
+  <!-- 引入掃描條碼的函式庫 -->
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <div style="margin-top: 10px; font-weight: 600; color: #4F46E5;">處理中...</div>
+  </div>
+
+  <header class="app-header">
+    <div class="app-title">財產及物品管理系統</div>
+    <nav class="tab-nav">
+      <button class="tab-btn" onclick="switchTab('add-tab')">新增資料</button>
+      <button class="tab-btn active" onclick="switchTab('query-tab')">查詢資料</button>
+      <button class="tab-btn" onclick="switchTab('scrap-tab')">報廢功能</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- 新增資料頁 -->
+    <div id="add-tab" class="tab-pane">
+      <form id="add-form" onsubmit="handleFormSubmit(event)">
+        <div class="form-group">
+          <label>類別</label>
+          <select id="category" required>
+            <option value="財產">財產</option>
+            <option value="物品">物品</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>編號</label>
+          <input type="text" id="id" required placeholder="請輸入編號或掃描條碼">
+          <button type="button" class="btn-scan" style="margin-top: 5px; width: 100%; padding: 0.5rem;" onclick="startScan('id')">
+             📷 掃描條碼輸入編號
+          </button>
+        </div>
+        <div class="form-group">
+          <label>名稱</label>
+          <input type="text" id="name" required placeholder="請輸入名稱">
+        </div>
+        <div class="form-group">
+          <label>別名</label>
+          <input type="text" id="alias" placeholder="選填">
+        </div>
+        <div class="form-group">
+          <label>型式/廠牌</label>
+          <input type="text" id="brand" placeholder="選填">
+        </div>
+        <div class="form-group">
+          <label>數量單位</label>
+          <input type="text" id="unit" placeholder="例如：台、個">
+        </div>
+        <div class="form-group">
+          <label>取得日期</label>
+          <input type="date" id="acquireDate">
+        </div>
+        <div class="form-group">
+          <label>使用年限</label>
+          <input type="number" id="lifespan" placeholder="年">
+        </div>
+        <div class="form-group">
+          <label>存置地點</label>
+          <input type="text" id="location" placeholder="選填">
+        </div>
+        <div class="form-group">
+          <label>使用人 / 使用單位</label>
+          <input type="text" id="userDept" placeholder="選填">
+        </div>
+        <div class="form-group">
+          <label>照片 1 (可使用手機拍照)</label>
+          <div class="file-input-wrapper">
+            <div class="btn-upload">📷 點擊拍照或上傳</div>
+            <input type="file" id="photo1" accept="image/*" capture="environment" onchange="previewImage(this, 'preview1')">
+          </div>
+          <img id="preview1" class="preview-img">
+        </div>
+        <div class="form-group">
+          <label>照片 2 (可使用手機拍照)</label>
+          <div class="file-input-wrapper">
+            <div class="btn-upload">📷 點擊拍照或上傳</div>
+            <input type="file" id="photo2" accept="image/*" capture="environment" onchange="previewImage(this, 'preview2')">
+          </div>
+          <img id="preview2" class="preview-img">
+        </div>
+        <div class="form-group">
+          <label>備註</label>
+          <textarea id="notes" rows="3" placeholder="其他說明..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>報廢日期</label>
+          <input type="date" id="scrapDate">
+        </div>
+        <div class="form-group" style="display:flex; align-items:center; gap: 10px;">
+          <input type="checkbox" id="isScrapped" style="width: auto;">
+          <label for="isScrapped" style="margin:0; cursor:pointer;">是否已完成報廢流程</label>
+        </div>
+        
+        <button type="submit" class="btn-primary" style="margin-top: 1rem;">送出資料</button>
+      </form>
+    </div>
+
+    <!-- 查詢資料頁 -->
+    <div id="query-tab" class="tab-pane active">
+      <div id="reader"></div>
+      <div class="search-bar-container">
+        <input type="text" id="searchInput" placeholder="輸入編號、名稱或關鍵字..." onkeypress="handleSearchEnter(event)">
+        <button type="button" class="btn-scan" onclick="startScan('searchInput')">📷</button>
+        <button type="button" class="btn-primary" style="width:auto;" onclick="searchData()">搜尋</button>
+      </div>
+      <div id="results-container" class="data-list">
+        <div style="text-align: center; color: var(--text-muted);">請輸入條件並點擊搜尋</div>
+      </div>
+    </div>
+
+    <!-- 報廢功能頁 -->
+    <div id="scrap-tab" class="tab-pane">
+      <div class="form-group">
+        <label>選擇報廢日期</label>
+        <input type="date" id="targetScrapDate" required>
+      </div>
+      <div class="form-group">
+        <label>選擇要產生報廢單的類別</label>
+        <select id="targetCategory" required>
+          <option value="財產">財產</option>
+          <option value="物品">物品</option>
+        </select>
+      </div>
+      <button type="button" class="btn-primary" onclick="generateScrapReport()">產生報廢單</button>
+      
+      <div id="scrap-result" style="margin-top: 1.5rem; text-align: center;"></div>
+    </div>
+  </main>
+
+  <!-- Detail Modal -->
+  <div id="detail-modal" class="modal-overlay">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeModal()">×</button>
+      <h2 id="modal-title" style="margin-bottom: 1rem; color: var(--primary-color);">詳細資料</h2>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Lightbox -->
+  <div id="lightbox" class="lightbox">
+    <button class="lightbox-close" onclick="closeLightbox()">×</button>
+    <img id="lightbox-img" src="">
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
