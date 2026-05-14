@@ -75,9 +75,14 @@ function ensureHeaders(sheet) {
     sheet.appendRow([
       "類別", "編號", "名稱", "別名", "型式/廠牌", "數量單位", 
       "取得日期", "使用年限", "存置地點", "使用人使用單位", 
-      "照片1", "照片2", "備註", "報廢日期", "是否已完成報廢流程"
+      "照片1", "照片2", "備註", "報廢日期", "是否已完成報廢流程",
+      "照片1連結", "照片2連結" // 隱藏欄位供網頁讀取
     ]);
     sheet.setFrozenRows(1);
+    // 隱藏連結欄位，並加寬圖片欄位
+    sheet.hideColumns(16, 2);
+    sheet.setColumnWidth(11, 100);
+    sheet.setColumnWidth(12, 100);
   }
 }
 
@@ -98,7 +103,17 @@ function saveProperty(data, photo1Base64, photo2Base64) {
     const p1Url = uploadPhoto(photo1Base64, `${data.id}_photo1_${timestamp}.jpg`);
     const p2Url = uploadPhoto(photo2Base64, `${data.id}_photo2_${timestamp}.jpg`);
 
-    const row = [
+    // 準備圖片嵌入物件 (使用直接下載連結)
+    const getDirectUrl = (url) => url ? url.replace("file/d/", "uc?export=download&id=").replace("/view?usp=drivesdk", "").replace("/view", "") : "";
+    
+    const p1Direct = getDirectUrl(p1Url);
+    const p2Direct = getDirectUrl(p2Url);
+
+    const img1 = p1Direct ? SpreadsheetApp.newCellImage().setSourceUrl(p1Direct).setAltTextDescription(p1Url).build() : "";
+    const img2 = p2Direct ? SpreadsheetApp.newCellImage().setSourceUrl(p2Direct).setAltTextDescription(p2Url).build() : "";
+
+    const lastRow = sheet.getLastRow() + 1;
+    const textRow = [
       data.category || "",
       data.id || "",
       data.name || "",
@@ -109,14 +124,24 @@ function saveProperty(data, photo1Base64, photo2Base64) {
       data.lifespan || "",
       data.location || "",
       data.userDept || "",
-      p1Url,
-      p2Url,
+      "", // 照片1 佔位
+      "", // 照片2 佔位
       data.notes || "",
       data.scrapDate || "",
-      data.isScrapped ? "是" : "否"
+      data.isScrapped ? "是" : "否",
+      p1Url,
+      p2Url
     ];
 
-    sheet.appendRow(row);
+    // 先寫入文字資料
+    sheet.getRange(lastRow, 1, 1, 17).setValues([textRow]);
+
+    // 寫入圖片物件
+    if (img1) sheet.getRange(lastRow, 11).setValue(img1);
+    if (img2) sheet.getRange(lastRow, 12).setValue(img2);
+
+    // 調整列高
+    sheet.setRowHeight(lastRow, 80);
     return { success: true, message: "資料新增成功！" };
   } catch (error) {
     return { success: false, message: error.toString() };
@@ -166,8 +191,8 @@ function searchProperties(query) {
           lifespan: row[7],
           location: row[8],
           userDept: row[9],
-          photo1: row[10],
-          photo2: row[11],
+          photo1: row[15], // 從隱藏欄位讀取連結
+          photo2: row[16], // 從隱藏欄位讀取連結
           notes: row[12],
           scrapDate: row[13],
           isScrapped: isScrapped === "是"

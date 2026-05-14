@@ -27,6 +27,7 @@
   </header>
 
   <main>
+    <div id="reader"></div>
     <!-- 新增資料頁 -->
     <div id="add-tab" class="tab-pane">
       <form id="add-form" onsubmit="handleFormSubmit(event)">
@@ -111,7 +112,6 @@
 
     <!-- 查詢資料頁 -->
     <div id="query-tab" class="tab-pane active">
-      <div id="reader"></div>
       <div class="search-bar-container">
         <input type="text" id="searchInput" placeholder="輸入編號、名稱或關鍵字..." onkeypress="handleSearchEnter(event)">
         <button type="button" class="btn-scan" onclick="startScan('searchInput')">📷</button>
