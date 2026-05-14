@@ -1,5 +1,10 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbyJkPfvNA0gosQeGaN7INsRVe82P-fCkN4ZWSenHSviMh-6pUYv8IB4vEmStYiYwPLg1w/exec";
 
+// 初始化
+window.onload = function() {
+  loadOptions();
+};
+
 // Tab Switching
 function switchTab(tabId) {
   document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
@@ -125,6 +130,7 @@ async function handleFormSubmit(e) {
         document.getElementById('add-form').reset();
         document.getElementById('preview1').style.display = 'none';
         document.getElementById('preview2').style.display = 'none';
+        loadOptions(); // 儲存成功後更新下拉選單
       } else {
         alert("新增失敗：" + response.message);
       }
@@ -283,7 +289,176 @@ function openDetailModal(index) {
   }
 
   body.innerHTML = html;
+  
+  // 加入按鈕區
+  const footer = document.createElement('div');
+  footer.style.marginTop = '1.5rem';
+  footer.style.display = 'flex';
+  footer.style.gap = '10px';
+  
+  const editBtn = document.createElement('button');
+  editBtn.className = 'btn-primary';
+  editBtn.style.background = '#6b7280';
+  editBtn.innerText = '修改資料';
+  editBtn.onclick = () => checkPasswordAndEdit(index);
+  
+  footer.appendChild(editBtn);
+  body.appendChild(footer);
+
   document.getElementById('detail-modal').classList.add('active');
+}
+
+// 密碼驗證與開啟編輯模式
+async function checkPasswordAndEdit(index) {
+  const password = prompt("請輸入系統密碼以進行修改：");
+  if (password === null) return;
+  
+  showLoading();
+  fetch(API_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'getAppConfig' })
+  })
+  .then(res => res.json())
+  .then(response => {
+    hideLoading();
+    if (response.success && response.data.password === password) {
+      renderEditMode(index);
+    } else {
+      alert("密碼錯誤，無法修改！");
+    }
+  })
+  .catch(err => {
+    hideLoading();
+    alert("驗證失敗：" + err);
+  });
+}
+
+function renderEditMode(index) {
+  const item = searchResultsCache[index];
+  const body = document.getElementById('modal-body');
+  
+  const generateEditRow = (label, id, type = 'text', val = '', options = null) => {
+    let inputHtml = `<input type="${type}" id="edit-${id}" value="${val || ''}" style="width:100%; padding:5px;">`;
+    if (type === 'select' && options) {
+      inputHtml = `<select id="edit-${id}" style="width:100%; padding:5px;">
+        ${options.map(opt => `<option value="${opt}" ${opt === val ? 'selected' : ''}>${opt}</option>`).join('')}
+      </select>`;
+    }
+    if (type === 'checkbox') {
+        inputHtml = `<input type="checkbox" id="edit-${id}" ${val ? 'checked' : ''}>`;
+    }
+    return `
+      <div class="detail-row" style="flex-direction:column; align-items:flex-start;">
+        <div class="detail-label">${label}</div>
+        <div class="detail-value" style="width:100%;">${inputHtml}</div>
+      </div>
+    `;
+  };
+
+  let html = `
+    ${generateEditRow('類別', 'category', 'select', item.category, ['財產', '物品'])}
+    ${generateEditRow('編號', 'id', 'text', item.id)}
+    ${generateEditRow('名稱', 'name', 'text', item.name)}
+    ${generateEditRow('別名', 'alias', 'text', item.alias)}
+    ${generateEditRow('型式/廠牌', 'brand', 'text', item.brand)}
+    ${generateEditRow('數量單位', 'unit', 'text', item.unit)}
+    ${generateEditRow('取得日期', 'acquireDate', 'date', item.acquireDate ? new Date(item.acquireDate).toISOString().split('T')[0] : '')}
+    ${generateEditRow('使用年限', 'lifespan', 'number', item.lifespan)}
+    ${generateEditRow('存置地點', 'location', 'text', item.location)}
+    ${generateEditRow('使用人/單位', 'userDept', 'text', item.userDept)}
+    ${generateEditRow('報廢日期', 'scrapDate', 'date', item.scrapDate ? new Date(item.scrapDate).toISOString().split('T')[0] : '')}
+    ${generateEditRow('是否完成報廢', 'isScrapped', 'checkbox', item.isScrapped)}
+    <div class="detail-row" style="flex-direction:column;">
+      <div class="detail-label">更換照片 1 (不更換請留空)</div>
+      <input type="file" id="edit-photo1" accept="image/*" capture="environment">
+    </div>
+    <div class="detail-row" style="flex-direction:column;">
+      <div class="detail-label">更換照片 2 (不更換請留空)</div>
+      <input type="file" id="edit-photo2" accept="image/*" capture="environment">
+    </div>
+  `;
+
+  body.innerHTML = html;
+  
+  const footer = document.createElement('div');
+  footer.style.marginTop = '1.5rem';
+  footer.style.display = 'flex';
+  footer.style.gap = '10px';
+  
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'btn-primary';
+  saveBtn.innerText = '儲存修改';
+  saveBtn.onclick = () => handleUpdateSubmit(index);
+  
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn-primary';
+  cancelBtn.style.background = '#e5e7eb';
+  cancelBtn.style.color = '#374151';
+  cancelBtn.innerText = '取消';
+  cancelBtn.onclick = () => openDetailModal(index);
+  
+  footer.appendChild(saveBtn);
+  footer.appendChild(cancelBtn);
+  body.appendChild(footer);
+}
+
+async function handleUpdateSubmit(index) {
+  const item = searchResultsCache[index];
+  showLoading();
+
+  const data = {
+    category: document.getElementById('edit-category').value,
+    id: document.getElementById('edit-id').value,
+    name: document.getElementById('edit-name').value,
+    alias: document.getElementById('edit-alias').value,
+    brand: document.getElementById('edit-brand').value,
+    unit: document.getElementById('edit-unit').value,
+    acquireDate: document.getElementById('edit-acquireDate').value,
+    lifespan: document.getElementById('edit-lifespan').value,
+    location: document.getElementById('edit-location').value,
+    userDept: document.getElementById('edit-userDept').value,
+    scrapDate: document.getElementById('edit-scrapDate').value,
+    isScrapped: document.getElementById('edit-isScrapped').checked,
+    photo1: item.photo1, // 預設保留舊連結
+    photo2: item.photo2
+  };
+
+  const p1File = document.getElementById('edit-photo1').files[0];
+  const p2File = document.getElementById('edit-photo2').files[0];
+
+  try {
+    const p1Base64 = p1File ? await compressImage(p1File) : null;
+    const p2Base64 = p2File ? await compressImage(p2File) : null;
+
+    fetch(API_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'updateProperty',
+        rowIdx: item.rowIdx,
+        data: data,
+        p1Base64: p1Base64,
+        p2Base64: p2Base64
+      })
+    })
+    .then(res => res.json())
+    .then(response => {
+      hideLoading();
+      if(response.success) {
+        alert("修改成功！");
+        closeModal();
+        searchData(); // 重新搜尋以更新畫面
+      } else {
+        alert("修改失敗：" + response.message);
+      }
+    })
+    .catch(err => {
+      hideLoading();
+      alert("更新連線錯誤：" + err);
+    });
+  } catch (err) {
+    hideLoading();
+    alert("圖片處理錯誤：" + err);
+  }
 }
 
 function closeModal() {
@@ -337,3 +512,36 @@ function generateScrapReport() {
     alert("產出報廢單失敗：" + err);
   });
 }
+
+// 載入存置地點與使用人的下拉選單
+function loadOptions() {
+  fetch(API_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'getOptions' })
+  })
+  .then(res => res.json())
+  .then(response => {
+    if (response.success && response.data) {
+      const options = response.data;
+      if (options.locations) {
+        updateDataList('location-list', options.locations);
+      }
+      if (options.users) {
+        updateDataList('user-list', options.users);
+      }
+    }
+  })
+  .catch(err => console.log("載入選單失敗", err));
+}
+
+function updateDataList(id, options) {
+  const list = document.getElementById(id);
+  if (!list) return;
+  list.innerHTML = '';
+  options.forEach(opt => {
+    const option = document.createElement('option');
+    option.value = opt;
+    list.appendChild(option);
+  });
+}
+
