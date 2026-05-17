@@ -665,6 +665,16 @@ function renderAuditList() {
             `<div style="font-size:0.8rem; color:#10b981; margin-top:5px;">✅ 已查核 (${item.auditor} 於 ${item.auditTime})</div>` : 
             `<div style="font-size:0.8rem; color:#ef4444; margin-top:5px;">❌ 未查核</div>`
           }
+          
+          <!-- 盤點備註欄位 -->
+          ${isAudited ? 
+            (item.auditNotes ? `<div style="font-size:0.85rem; color:#4b5563; margin-top:6px; background:#f3f4f6; padding: 4px 8px; border-radius:4px; display:inline-block;">📝 異常備註：${item.auditNotes}</div>` : '') : 
+            `<div style="margin-top: 8px;" onclick="event.stopPropagation();">
+              <input type="text" id="audit-notes-${item.rowIdx}" placeholder="盤點備註（如損壞、異常紀錄等）" 
+                     value="${item.auditNotes || ''}" 
+                     style="width: 100%; padding: 6px 10px; font-size: 0.85rem; border: 1px solid #d1d5db; border-radius: 4px; box-sizing: border-box;">
+             </div>`
+          }
         </div>
         <div>
           ${isAudited ? 
@@ -687,10 +697,14 @@ function markAsAudited(rowIdx) {
     return;
   }
   
+  // 取得備註欄位內容
+  const notesEl = document.getElementById(`audit-notes-${rowIdx}`);
+  const notes = notesEl ? notesEl.value.trim() : "";
+  
   showLoading();
   fetch(API_URL, {
     method: 'POST',
-    body: JSON.stringify({ action: 'updateAuditStatus', rowIdx: rowIdx, auditor: auditor })
+    body: JSON.stringify({ action: 'updateAuditStatus', rowIdx: rowIdx, auditor: auditor, notes: notes })
   })
   .then(res => res.json())
   .then(response => {
@@ -700,6 +714,7 @@ function markAsAudited(rowIdx) {
       if (item) {
         item.auditTime = response.auditTime;
         item.auditor = response.auditor;
+        item.auditNotes = response.auditNotes; // 更新局部快取的備註
       }
       renderAuditList();
       hideLoading();

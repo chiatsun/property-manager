@@ -31,7 +31,7 @@ function doPost(e) {
       let res = generateScrapReport(requestData.targetDate, requestData.targetCategory);
       return ContentService.createTextOutput(JSON.stringify(res)).setMimeType(ContentService.MimeType.JSON);
     } else if (action === 'updateAuditStatus') {
-      let res = updateAuditStatus(requestData.rowIdx, requestData.auditor);
+      let res = updateAuditStatus(requestData.rowIdx, requestData.auditor, requestData.notes);
       return ContentService.createTextOutput(JSON.stringify(res)).setMimeType(ContentService.MimeType.JSON);
     } else if (action === 'clearAuditData') {
       let res = clearAuditData(requestData.password);
@@ -109,7 +109,7 @@ function ensureHeaders(sheet) {
       "取得日期", "使用年限", "存置地點", "使用人使用單位", 
       "照片1", "照片2", "備註", "報廢日期", "是否已完成報廢流程",
       "照片1連結", "照片2連結", // 隱藏欄位供網頁讀取
-      "最新查核時間", "查核人員"
+      "最新查核時間", "查核人員", "盤點備註"
     ]);
     sheet.setFrozenRows(1);
     // 隱藏連結欄位，並加寬圖片欄位
@@ -117,9 +117,11 @@ function ensureHeaders(sheet) {
     sheet.setColumnWidth(11, 100);
     sheet.setColumnWidth(12, 100);
   } else {
-    // 確保既有試算表補上查核欄位
+    // 確保既有試算表補上查核與盤點備註欄位
     if (sheet.getRange("R1").getValue() !== "最新查核時間") {
-      sheet.getRange("R1:S1").setValues([["最新查核時間", "查核人員"]]);
+      sheet.getRange("R1:T1").setValues([["最新查核時間", "查核人員", "盤點備註"]]);
+    } else if (sheet.getRange("T1").getValue() !== "盤點備註") {
+      sheet.getRange("T1").setValue("盤點備註");
     }
   }
 }
@@ -317,7 +319,8 @@ function searchProperties(query) {
           scrapDate: row[13],
           isScrapped: isScrapped === "是",
           auditTime: row[17], // 第 18 欄
-          auditor: row[18]    // 第 19 欄
+          auditor: row[18],   // 第 19 欄
+          auditNotes: row[19] || "" // 第 20 欄
         });
       }
     }
@@ -482,7 +485,7 @@ function generateScrapReport(targetDate, targetCategory) {
 /**
  * 更新查核狀態
  */
-function updateAuditStatus(rowIdx, auditor) {
+function updateAuditStatus(rowIdx, auditor, notes) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName("財產清單");
@@ -491,10 +494,10 @@ function updateAuditStatus(rowIdx, auditor) {
     // 時間格式 yyyy/MM/dd HH:mm:ss
     const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm:ss");
     
-    // R欄(18) = 時間, S欄(19) = 人員
-    sheet.getRange(rowIdx, 18, 1, 2).setValues([[timestamp, auditor]]);
+    // R欄(18) = 時間, S欄(19) = 人員, T欄(20) = 備註
+    sheet.getRange(rowIdx, 18, 1, 3).setValues([[timestamp, auditor, notes || ""]]);
     
-    return { success: true, message: "查核完成", auditTime: timestamp, auditor: auditor };
+    return { success: true, message: "查核完成", auditTime: timestamp, auditor: auditor, auditNotes: notes || "" };
   } catch (error) {
     return { success: false, message: error.toString() };
   }
@@ -516,8 +519,8 @@ function clearAuditData(password) {
     
     const lastRow = sheet.getLastRow();
     if (lastRow > 1) {
-      // 清除 R 欄與 S 欄 (行2到最後一行的第18,19欄)
-      sheet.getRange(2, 18, lastRow - 1, 2).clearContent();
+      // 清除 R 欄、S 欄與 T 欄 (行2到最後一行的第18,19,20欄)
+      sheet.getRange(2, 18, lastRow - 1, 3).clearContent();
     }
     
     return { success: true, message: "查核資料已成功清除！" };
