@@ -253,14 +253,27 @@ function renderSearchResults(results) {
     }
 
     html += `
-      <div class="${cardClass}" onclick="openDetailModal(${index})">
-        <div class="card-header">
-          <span class="card-title">${item.name} ${scrapIcon}</span>
-          <span class="card-id">${item.id}</span>
+      <div class="${cardClass}" onclick="openDetailModal(${index})" style="display:flex; flex-direction:row; align-items:center; text-align:left;">
+        <!-- 左側照片1 -->
+        <div style="flex-shrink:0; margin-right: 15px; width: 80px; height: 80px; background: #e5e7eb; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+          ${item.photo1 ? `<img src="${item.photo1}" style="width: 100%; height: 100%; object-fit: cover;" alt="照片1">` : `<span style="color:#9ca3af; font-size: 0.8rem;">無照片</span>`}
         </div>
-        <div class="card-body">
-          類別：${item.category} | 狀態：${item.isScrapped ? '已報廢' : '使用中'}<br>
-          地點：${item.location || '未設定'} | 報廢日：${item.scrapDate ? new Date(item.scrapDate).toLocaleDateString() : '無'}
+        
+        <!-- 右側資訊 -->
+        <div style="flex:1; min-width:0;">
+          <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+            <span class="card-title" style="font-weight:bold; font-size:1.1rem; color:#1f2937; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:70%;">
+              ${item.name || '未命名'} ${scrapIcon}
+            </span>
+            <span class="card-id" style="font-family:monospace; background:rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px; font-size:0.8rem; margin-left:10px; flex-shrink:0;">
+              ${item.id}
+            </span>
+          </div>
+          <div class="card-body" style="font-size:0.9rem; color:#4b5563; line-height:1.4;">
+            <div>別名：${item.alias || '無'}</div>
+            <div style="margin-top:2px;">型式/廠牌：${item.brand || '無'}</div>
+            <div style="margin-top:2px;">存置地點：${item.location || '未設定'}</div>
+          </div>
         </div>
       </div>
     `;
@@ -598,6 +611,29 @@ function updateDataList(id, options) {
 // ================= 年度盤點功能 =================
 let auditListCache = [];
 
+function formatAuditTime(timeStr) {
+  if (!timeStr) return '';
+  try {
+    const d = new Date(timeStr);
+    if (isNaN(d.getTime())) {
+      // 處理伺服器直接回傳的 "yyyy/MM/dd HH:mm:ss" 格式
+      const parts = timeStr.toString().split(' ');
+      if (parts.length === 2) {
+        const timeParts = parts[1].split(':');
+        if (timeParts.length >= 2) {
+          return `${parts[0]} ${timeParts[0]}:${timeParts[1]}`;
+        }
+      }
+      return timeStr;
+    }
+    const pad = (n) => String(n).padStart(2, '0');
+    // 回傳本地時間 yyyy/MM/dd HH:mm
+    return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  } catch (e) {
+    return timeStr;
+  }
+}
+
 function loadAuditData() {
   showLoading();
   fetch(API_URL, {
@@ -662,7 +698,7 @@ function renderAuditList() {
           <div style="font-weight:bold; font-size:1.1rem; color:#1f2937;">${item.name} <span style="font-size:0.8rem; color:#6b7280; font-weight:normal;">(${item.id})</span></div>
           <div style="font-size:0.9rem; color:#4b5563; margin-top:5px;">存置地點：${item.location || '未設定'}</div>
           ${isAudited ? 
-            `<div style="font-size:0.8rem; color:#10b981; margin-top:5px;">✅ 已查核 (${item.auditor} 於 ${item.auditTime})</div>` : 
+            `<div style="font-size:0.8rem; color:#10b981; margin-top:5px;">✅ 已查核 (${item.auditor} 於 ${formatAuditTime(item.auditTime)})</div>` : 
             `<div style="font-size:0.8rem; color:#ef4444; margin-top:5px;">❌ 未查核</div>`
           }
           
