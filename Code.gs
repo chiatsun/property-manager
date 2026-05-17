@@ -136,10 +136,16 @@ function saveProperty(data, photo1Base64, photo2Base64) {
     }
     ensureHeaders(sheet);
 
+    // 智慧過濾機關代碼：若 ID 長度大於 5 且以 "33" 開頭，後端儲存時自動洗掉
+    let cleanId = (data.id || "").toString().trim();
+    if (cleanId.startsWith("33") && cleanId.length > 5) {
+      cleanId = cleanId.substring(2);
+    }
+
     // 上傳照片
     const timestamp = new Date().getTime();
-    const p1Url = uploadPhoto(photo1Base64, `${data.id}_photo1_${timestamp}.jpg`);
-    const p2Url = uploadPhoto(photo2Base64, `${data.id}_photo2_${timestamp}.jpg`);
+    const p1Url = uploadPhoto(photo1Base64, `${cleanId}_photo1_${timestamp}.jpg`);
+    const p2Url = uploadPhoto(photo2Base64, `${cleanId}_photo2_${timestamp}.jpg`);
 
     // 準備圖片嵌入物件 (使用直接下載連結)
     const getDirectUrl = (url) => {
@@ -157,7 +163,7 @@ function saveProperty(data, photo1Base64, photo2Base64) {
     const lastRow = sheet.getLastRow() + 1;
     const textRow = [
       data.category || "",
-      data.id || "",
+      cleanId,
       data.name || "",
       data.alias || "",
       data.brand || "",
@@ -204,8 +210,14 @@ function updateProperty(rowIdx, data, photo1Base64, photo2Base64) {
     let p2Url = data.photo2;
     const timestamp = new Date().getTime();
 
-    if (photo1Base64) p1Url = uploadPhoto(photo1Base64, `${data.id}_photo1_${timestamp}.jpg`);
-    if (photo2Base64) p2Url = uploadPhoto(photo2Base64, `${data.id}_photo2_${timestamp}.jpg`);
+    // 智慧過濾機關代碼：若 ID 長度大於 5 且以 "33" 開頭，後端更新時自動洗掉
+    let cleanId = (data.id || "").toString().trim();
+    if (cleanId.startsWith("33") && cleanId.length > 5) {
+      cleanId = cleanId.substring(2);
+    }
+
+    if (photo1Base64) p1Url = uploadPhoto(photo1Base64, `${cleanId}_photo1_${timestamp}.jpg`);
+    if (photo2Base64) p2Url = uploadPhoto(photo2Base64, `${cleanId}_photo2_${timestamp}.jpg`);
 
     const getDirectUrl = (url) => {
       if (!url) return "";
@@ -217,7 +229,7 @@ function updateProperty(rowIdx, data, photo1Base64, photo2Base64) {
 
     const textRow = [
       data.category || "",
-      data.id || "",
+      cleanId,
       data.name || "",
       data.alias || "",
       data.brand || "",
@@ -280,7 +292,9 @@ function searchProperties(query) {
       const isScrapped = row[14];
 
       // 檢查是否符合關鍵字 (編號、名稱、別名)
-      if (id.toString().toLowerCase().includes(q) || 
+      const idStr = id.toString().toLowerCase();
+      if (idStr.includes(q) || 
+          (q.startsWith("33") && q.length > 2 && idStr.includes(q.substring(2))) ||
           name.toString().toLowerCase().includes(q) || 
           alias.toString().toLowerCase().includes(q) ||
           q === "") {

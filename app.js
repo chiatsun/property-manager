@@ -161,7 +161,12 @@ function startScan(targetInputId) {
   }
 
   const qrCodeSuccessCallback = (decodedText, decodedResult) => {
-    document.getElementById(targetInputId).value = decodedText;
+    // 智慧過濾：若掃描出來的條碼長度大於 5 且開頭是機關代碼 "33"，自動去掉前綴 "33"
+    let cleanText = decodedText;
+    if (cleanText.startsWith("33") && cleanText.length > 5) {
+      cleanText = cleanText.substring(2);
+    }
+    document.getElementById(targetInputId).value = cleanText;
     html5QrCode.stop().then(() => {
       readerElement.style.display = 'none';
     }).catch(err => {
