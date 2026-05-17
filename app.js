@@ -11,13 +11,18 @@ function switchTab(tabId) {
   document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
   
   document.getElementById(tabId).classList.add('active');
-  const btnIndex = tabId === 'add-tab' ? 0 : tabId === 'query-tab' ? 1 : 2;
+  const btnIndex = tabId === 'add-tab' ? 0 : tabId === 'query-tab' ? 1 : tabId === 'scrap-tab' ? 2 : 3;
   document.querySelectorAll('.tab-btn')[btnIndex].classList.add('active');
 
   // Stop scanner if active
   if (html5QrCode) {
     html5QrCode.stop().catch(err => console.log("Stop scanner error", err));
     document.getElementById('reader').style.display = 'none';
+  }
+
+  // 若切換到盤點分頁，載入盤點資料
+  if (tabId === 'audit-tab') {
+    loadAuditData();
   }
 }
 
@@ -228,10 +233,24 @@ function renderSearchResults(results) {
       cardClass += 'type-item'; // 黃底
     }
 
+    // 計算可報廢日期
+    let isScrappable = false;
+    let scrapIcon = '';
+    if (item.acquireDate && item.lifespan) {
+      const acquire = new Date(item.acquireDate);
+      const canScrapDate = new Date(acquire.getFullYear() + Number(item.lifespan), acquire.getMonth(), acquire.getDate());
+      
+      const today = new Date();
+      if (today >= canScrapDate && !item.isScrapped) {
+        isScrappable = true;
+        scrapIcon = '<span style="color:#ef4444; font-size: 0.9em; margin-left: 5px;" title="已達報廢年限">⚠️可報廢</span>';
+      }
+    }
+
     html += `
       <div class="${cardClass}" onclick="openDetailModal(${index})">
         <div class="card-header">
-          <span class="card-title">${item.name}</span>
+          <span class="card-title">${item.name} ${scrapIcon}</span>
           <span class="card-id">${item.id}</span>
         </div>
         <div class="card-body">
@@ -259,15 +278,30 @@ function openDetailModal(index) {
     </div>
   `;
 
+  // 計算可報廢日期
+  let canScrapDateStr = '';
+  let scrapIcon = '';
+  if (item.acquireDate && item.lifespan) {
+    const acquire = new Date(item.acquireDate);
+    const canScrapDate = new Date(acquire.getFullYear() + Number(item.lifespan), acquire.getMonth(), acquire.getDate());
+    canScrapDateStr = canScrapDate.toLocaleDateString();
+    
+    const today = new Date();
+    if (today >= canScrapDate && !item.isScrapped) {
+      scrapIcon = '<span style="color:#ef4444; font-weight:bold; margin-left:5px;">⚠️可報廢</span>';
+    }
+  }
+
   let html = `
     ${generateRow('編號', item.id)}
-    ${generateRow('名稱', item.name)}
+    ${generateRow('名稱', item.name + scrapIcon)}
     ${generateRow('別名', item.alias)}
     ${generateRow('類別', item.category)}
     ${generateRow('型式/廠牌', item.brand)}
     ${generateRow('數量單位', item.unit)}
     ${generateRow('取得日期', item.acquireDate ? new Date(item.acquireDate).toLocaleDateString() : '')}
     ${generateRow('使用年限', item.lifespan ? item.lifespan + ' 年' : '')}
+    ${generateRow('可報廢日期', canScrapDateStr)}
     ${generateRow('存置地點', item.location)}
     ${generateRow('使用人/單位', item.userDept)}
     ${generateRow('報廢日期', item.scrapDate ? new Date(item.scrapDate).toLocaleDateString() : '')}
@@ -500,8 +534,8 @@ function generateScrapReport() {
     if (response.success) {
       resultDiv.innerHTML = `
         <div style="color: #10b981; font-weight: bold; margin-bottom: 10px;">${response.message}</div>
-        <a href="${response.sheetUrl}" target="_blank" class="btn-primary" style="display:inline-block; text-decoration:none;">前往下載/查看報廢單</a>
-        <div style="margin-top:10px; font-size:0.9rem; color:#6b7280;">提示：點擊連結開啟 Google 試算表後，可透過「檔案 > 下載 > OpenDocument 格式 (.ods)」下載為 ODS 檔。</div>
+        <a href="${response.sheetUrl}" class="btn-primary" style="display:inline-block; text-decoration:none;">📥 直接下載報廢單 (.ods)</a>
+        <div style="margin-top:10px; font-size:0.9rem; color:#6b7280;">點擊按鈕即可將該分頁下載為 ODS 檔案格式。</div>
       `;
     } else {
       resultDiv.innerHTML = `<div style="color: #ef4444;">${response.message}</div>`;
@@ -525,6 +559,17 @@ function loadOptions() {
       const options = response.data;
       if (options.locations) {
         updateDataList('location-list', options.locations);
+        // 也更新年度盤點的地點篩選選單
+        const auditLocFilter = document.getElementById('audit-location-filter');
+        if (auditLocFilter) {
+          auditLocFilter.innerHTML = '<option value="">全部地點</option>';
+          options.locations.forEach(opt => {
+            const option = document.createElement('option');
+            option.value = opt;
+            option.textContent = opt;
+            auditLocFilter.appendChild(option);
+          });
+        }
       }
       if (options.users) {
         updateDataList('user-list', options.users);
@@ -545,3 +590,146 @@ function updateDataList(id, options) {
   });
 }
 
+// ================= 年度盤點功能 =================
+let auditListCache = [];
+
+function loadAuditData() {
+  showLoading();
+  fetch(API_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'searchProperties', query: '' })
+  })
+  .then(res => res.json())
+  .then(response => {
+    hideLoading();
+    if(response.success) {
+      auditListCache = response.data;
+      searchResultsCache = response.data; // 同步快取供 openDetailModal 讀取
+      renderAuditList();
+    } else {
+      alert("載入失敗：" + response.message);
+    }
+  })
+  .catch(err => {
+    hideLoading();
+    alert("連線錯誤：" + err);
+  });
+}
+
+function renderAuditList() {
+  const container = document.getElementById('audit-list-container');
+  const locFilter = document.getElementById('audit-location-filter').value;
+  const statusFilter = document.getElementById('audit-status-filter').value;
+  
+  // 排除已報廢
+  let filtered = auditListCache.filter(item => !item.isScrapped);
+  
+  if (locFilter) {
+    filtered = filtered.filter(item => item.location === locFilter);
+  }
+  
+  if (statusFilter === '已查核') {
+    filtered = filtered.filter(item => item.auditTime);
+  } else if (statusFilter === '未查核') {
+    filtered = filtered.filter(item => !item.auditTime);
+  }
+  
+  if (filtered.length === 0) {
+    container.innerHTML = '<div style="text-align:center; color:#6b7280; padding: 20px;">沒有符合條件的盤點資料</div>';
+    return;
+  }
+
+  let html = '';
+  filtered.forEach(item => {
+    const isAudited = !!item.auditTime;
+    let cardClass = 'data-card ' + (item.category === '財產' ? 'type-property' : 'type-item');
+    const originalIndex = auditListCache.indexOf(item); // 取得在原始陣列中的 index 供 openDetailModal 使用
+    
+    html += `
+      <div class="${cardClass}" style="display:flex; flex-direction:row; justify-content:space-between; align-items:center; text-align:left;">
+        
+        <!-- 左側照片，點擊可開啟詳細資料 -->
+        <div style="flex-shrink:0; margin-right: 15px; cursor: pointer; width: 80px; height: 80px; background: #e5e7eb; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden;" onclick="openDetailModal(${originalIndex})">
+          ${item.photo1 ? `<img src="${item.photo1}" style="width: 100%; height: 100%; object-fit: cover;" alt="照片">` : `<span style="color:#9ca3af; font-size: 0.8rem;">無照片</span>`}
+        </div>
+
+        <div style="flex:1; padding-right:10px; cursor: pointer;" onclick="openDetailModal(${originalIndex})">
+          <div style="font-weight:bold; font-size:1.1rem; color:#1f2937;">${item.name} <span style="font-size:0.8rem; color:#6b7280; font-weight:normal;">(${item.id})</span></div>
+          <div style="font-size:0.9rem; color:#4b5563; margin-top:5px;">存置地點：${item.location || '未設定'}</div>
+          ${isAudited ? 
+            `<div style="font-size:0.8rem; color:#10b981; margin-top:5px;">✅ 已查核 (${item.auditor} 於 ${item.auditTime})</div>` : 
+            `<div style="font-size:0.8rem; color:#ef4444; margin-top:5px;">❌ 未查核</div>`
+          }
+        </div>
+        <div>
+          ${isAudited ? 
+            `<button class="btn-primary" style="background:#d1d5db; color:#374151; width:auto; font-size:0.9rem; padding: 6px 12px; cursor:not-allowed;" disabled>已查核</button>` :
+            `<button class="btn-primary" style="background:#10b981; width:auto; font-size:0.9rem; padding: 6px 12px;" onclick="markAsAudited(${item.rowIdx})">確認查核</button>`
+          }
+        </div>
+      </div>
+    `;
+  });
+  
+  container.innerHTML = html;
+}
+
+function markAsAudited(rowIdx) {
+  const auditor = document.getElementById('auditor-name').value.trim();
+  if (!auditor) {
+    alert("請先在上方輸入「本次查核人員姓名」！");
+    document.getElementById('auditor-name').focus();
+    return;
+  }
+  
+  showLoading();
+  fetch(API_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'updateAuditStatus', rowIdx: rowIdx, auditor: auditor })
+  })
+  .then(res => res.json())
+  .then(response => {
+    if(response.success) {
+      // 局部更新 local cache
+      const item = auditListCache.find(i => i.rowIdx === rowIdx);
+      if (item) {
+        item.auditTime = response.auditTime;
+        item.auditor = response.auditor;
+      }
+      renderAuditList();
+      hideLoading();
+    } else {
+      hideLoading();
+      alert("查核更新失敗：" + response.message);
+    }
+  })
+  .catch(err => {
+    hideLoading();
+    alert("連線錯誤：" + err);
+  });
+}
+
+function promptClearAuditData() {
+  const pwd = prompt("請輸入系統密碼以清除所有盤點紀錄：");
+  if (pwd === null) return;
+  
+  showLoading();
+  fetch(API_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'clearAuditData', password: pwd })
+  })
+  .then(res => res.json())
+  .then(response => {
+    if(response.success) {
+      alert("所有盤點紀錄已成功清除！");
+      loadAuditData(); // 重新載入，畫面會變回全部未查核
+    } else {
+      hideLoading();
+      alert(response.message);
+    }
+  })
+  .catch(err => {
+    hideLoading();
+    alert("連線錯誤：" + err);
+  });
+}

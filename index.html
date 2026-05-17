@@ -23,6 +23,7 @@
       <button class="tab-btn" onclick="switchTab('add-tab')">新增資料</button>
       <button class="tab-btn active" onclick="switchTab('query-tab')">查詢資料</button>
       <button class="tab-btn" onclick="switchTab('scrap-tab')">報廢功能</button>
+      <button class="tab-btn" onclick="switchTab('audit-tab')">年度盤點</button>
     </nav>
   </header>
 
@@ -140,6 +141,42 @@
       <button type="button" class="btn-primary" onclick="generateScrapReport()">產生報廢單</button>
       
       <div id="scrap-result" style="margin-top: 1.5rem; text-align: center;"></div>
+    </div>
+
+    <!-- 年度盤點頁 -->
+    <div id="audit-tab" class="tab-pane">
+      <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+        <div class="form-group">
+          <label style="color: #4338ca;">🧑‍💻 本次查核人員姓名 (必填)</label>
+          <input type="text" id="auditor-name" placeholder="請輸入您的姓名">
+        </div>
+        <hr style="border: 0; height: 1px; background: #e5e7eb; margin: 15px 0;">
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <div class="form-group" style="flex: 1; min-width: 150px; margin-bottom: 0;">
+            <label>篩選存置地點</label>
+            <select id="audit-location-filter" onchange="renderAuditList()">
+              <option value="">全部地點</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex: 1; min-width: 150px; margin-bottom: 0;">
+            <label>篩選查核狀態</label>
+            <select id="audit-status-filter" onchange="renderAuditList()">
+              <option value="">全部狀態</option>
+              <option value="未查核">未查核</option>
+              <option value="已查核">已查核</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <h3 style="color: #374151; font-size: 1.1rem; margin:0;">盤點清單 (不含已報廢)</h3>
+        <button onclick="promptClearAuditData()" class="btn-scan" style="background-color: #ef4444; color: white; padding: 5px 10px; font-size: 0.9rem; width: auto; border:none; border-radius: 4px;">🧹 清除盤點紀錄</button>
+      </div>
+
+      <div id="audit-list-container" class="data-list">
+        <!-- 盤點卡片由 JS 產生 -->
+      </div>
     </div>
   </main>
 
